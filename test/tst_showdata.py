@@ -76,14 +76,14 @@ class guiFrame(wx.Frame):
 	#self.sketch.addLayer(filePath, self.sketch.pen, self.sketch.brush)           
 
     #----------------------------------------------------------------------
-    def getShpData(self, database_name = "shapefile", collection_name = "bou1_4p"):
+    def getShpData(self, database_name = "shapefile", collection_name = "bou2_4p"):
 	""""""
 	
 	data = mongo_bll.find(database_name, collection_name, show_dict= {"geom":1,"NAME":1, "_id":0})
 	return data
     
     #----------------------------------------------------------------------
-    def getExtent(self, database_name = "metaDB", collection_name = "bou1_4p"):
+    def getExtent(self, database_name = "metaDB", collection_name = "bou2_4p"):
 	""""""
 	data = mongo_bll.find(database_name, collection_name, show_dict={"extent":1,"_id":0})
 	for i in data:
@@ -94,6 +94,16 @@ class guiFrame(wx.Frame):
 	extent = self.getExtent()
 	#self.sketch = sketchWindow(self, wx.ID_ANY)
 	self.sketch.addLayer(self.data, wx.Pen("black",2,wx.SOLID),wx.Brush("#0000"), extent)
+	
+        #dialog = wx.FileDialog(None, u'打开Shape文件', u'.', u'', u'Shape File (*.shp)|*.shp|All Files (*.*)|*.*', style = wx.OPEN )             
+        
+        #if dialog.ShowModal() == wx.ID_OK:
+            #self.sketch.color = wx.Colour(random.randrange(0,255),random.randrange(0,255),random.randrange(0,255))
+	    ##self.sketch.color = wx.Colour(0,0,0,0)
+            #self.sketch.brush = wx.Brush(self.sketch.color)
+            #self.sketch.addLayer(dialog.GetPath(), self.sketch.pen, self.sketch.brush)
+        #dialog.Destroy()
+	
 	
     def OnSave(self, event):
 	#self.data = self.getShpData(collection_name="XianCh_point")
@@ -111,6 +121,7 @@ class guiFrame(wx.Frame):
 
 	#mongo_bll.create_spaceIndex(database_name = "shapefile", collection_name = "XianCh_point")
 	extent = self.getExtent(collection_name="XianCh_point")
+	self.sketch.addLayer(self.data, wx.Pen("red",2,wx.SOLID),wx.Brush("#f0f0f0"), extent)
 	self.sketch.addLayer(self.data, wx.Pen("red",2,wx.SOLID),wx.Brush("#f0f0f0"), extent)
 	
     def OnClose(self, event):
@@ -272,6 +283,29 @@ class sketchWindow(wx.Panel):
 		    #dc.SetBrush(self.brush)
 		    dc.DrawPolygon(self.geometry)
 		else: pass
+		
+    def DrawPolygon(self, polygon, type, brush ): 
+	self.pen = pen
+	self.brush = brush	
+	for geometry in polygon:
+	    self.geometry = []
+	    for coords in geometry:
+		x = (coords[0]-self.extent[0]/2-self.extent[1]/2)*self.ratio + self.size.width/2 + self.pos[0]
+		y = self.size.height-(coords[1]-self.extent[2]/2-self.extent[3]/2)*self.ratio-self.size.height/2-self.pos[1]		    
+		self.geometry.append((x,y))
+	    if type == 'point':
+		dc.SetBrush(self.brush)
+		for point in self.geometry:	
+		    dc.DrawCirclePoint(point ,2)
+		#print self.cal_point(122, 55, self.extent)
+		#dc.DrawCirclePoint((750.2524900778502, 90.17498341600344),10)
+	    if type == 'line':
+		dc.SetBrush(self.brush)
+		dc.DrawLines(self.geometry)		    
+	    if type == 'polygon':
+		dc.SetBrush(self.brush)
+		dc.DrawPolygon(self.geometry)
+	    else: pass    
 	
     #----------------------------------------------------------------------
     def DrawText(self, dc):
