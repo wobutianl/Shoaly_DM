@@ -11,6 +11,7 @@ from array import array
 from osgeo import ogr
 #import GridSimple
 
+import mongo_bll
 """存在的问题：
 1：不能添加数据
 2：不能实现颜色的改变
@@ -179,28 +180,79 @@ class guiFrame(wx.Frame):
 	self.statusbar.SetStatusText(u"当前线条长度：" , 1)  	  
 	#设置状态栏3内容  
 	self.statusbar.SetStatusText(u"线条数目：" , 2)                  
-        event.Skip()  	            
-
+        event.Skip()  	  
+	
+    #----------------------------------------------------------------------
+    def getShpData(self, database_name = "shapefile", collection_name = "bou1_4p"):
+	""""""
+	
+	data = mongo_bll.find(database_name, collection_name, show_dict= {"geom":1,"NAME":1, "_id":0})
+	return data
+    
+    #----------------------------------------------------------------------
+    def getExtent(self, database_name = "metaDB", collection_name = "bou1_4p"):
+	""""""
+	data = mongo_bll.find(database_name, collection_name, show_dict={"extent":1,"_id":0})
+	for i in data:
+	    return i["extent"]
+	
+    #--------------------------------------------------------------------------
     def OnOpen(self, event):
         dialog = wx.FileDialog(None, u'打开Shape文件', u'.', u'', u'Shape File (*.shp)|*.shp|All Files (*.*)|*.*', style = wx.OPEN )             
         
         if dialog.ShowModal() == wx.ID_OK:
-            #self.sketch.color = wx.Colour(random.randrange(0,255),random.randrange(0,255),random.randrange(0,255))
-	    self.sketch.color = wx.Colour(0,0,0,0)
+            self.sketch.color = wx.Colour(random.randrange(0,255),random.randrange(0,255),random.randrange(0,255))
+	    #self.sketch.color = wx.Colour(0,0,0,0)
             self.sketch.brush = wx.Brush(self.sketch.color)
             self.sketch.addLayer(dialog.GetPath(), self.sketch.pen, self.sketch.brush)
         dialog.Destroy()
 
     def OnClose(self, event):
-        self.sketch.SetLayers([])
-        self.sketch.extent = []
+	#self.data = self.getShpData(collection_name="XianCh_point")
+	
+	# Find the 10 users nearest to the point 40, 40 with max distance 5 degrees
+	#box = [[110,30],[120,40]]
+	#center = [100,33]
+	#radius = 5
+	polygon1 = [[100,30],[110,35],[115,33],[105,25]] 
+	match_dict = {"geom.coordinates":{"$within":{"$polygon":polygon1}}}
+	#{"geom.coordinates":{"$within":{"$center":[center,radius]}}}  #{"geom.coordinates":{"$within":{"$box":box}}}
+	#limit = 52
+	self.data  = mongo_bll.find(database_name = "shapefile",collection_name="XianCh_point",
+	                            match_dict= match_dict, show_dict= {"geom":1, "_id":0}, )
+
+	#mongo_bll.create_spaceIndex(database_name = "shapefile", collection_name = "XianCh_point")
+	extent = self.getExtent(collection_name="XianCh_point")
+	self.sketch.addLayer2(self.data, wx.Pen("red",2,wx.SOLID),wx.Brush("#f0f0f0"), extent)
+	#self.sketch.addPolygon(polygon1, "polygon")
+	
+        #self.sketch.SetLayers([])
+        #self.sketch.extent = []
 
     def OnQuit(self, event):
-        dlg = wx.MessageDialog(None,u'确定退出?',u'提示',wx.YES_NO|wx.ICON_QUESTION)
-        result = dlg.ShowModal()
-        if result == wx.ID_YES:
-            self.Close()
-        dlg.Destroy()
+	#self.data = self.getShpData(collection_name="XianCh_point")
+	
+	# Find the 10 users nearest to the point 40, 40 with max distance 5 degrees
+	#box = [[110,30],[120,40]]
+	#center = [100,33]
+	#radius = 5
+	polygon1 = [[100,30],[110,35],[115,33],[105,25]] 
+	match_dict = {"geom.coordinates":{"$within":{"$polygon":polygon1}}}
+	#{"geom.coordinates":{"$within":{"$center":[center,radius]}}}  #{"geom.coordinates":{"$within":{"$box":box}}}
+	#limit = 52
+	self.data  = mongo_bll.find(database_name = "shapefile",collection_name="XianCh_point",
+	                            match_dict= match_dict, show_dict= {"geom":1, "_id":0}, )
+
+	#mongo_bll.create_spaceIndex(database_name = "shapefile", collection_name = "XianCh_point")
+	extent = self.getExtent(collection_name="XianCh_point")
+	self.sketch.addLayer2(self.data, wx.Pen("red",2,wx.SOLID),wx.Brush("#f0f0f0"), extent)
+	#self.sketch.addLayer(self.data, wx.Pen("red",2,wx.SOLID),wx.Brush("#f0f0f0"), extent)
+	
+        #dlg = wx.MessageDialog(None,u'确定退出?',u'提示',wx.YES_NO|wx.ICON_QUESTION)
+        #result = dlg.ShowModal()
+        #if result == wx.ID_YES:
+            #self.Close()
+        #dlg.Destroy()
 
     def OnLine(self, event):
         self.sketch.lineColor()
@@ -241,8 +293,11 @@ class sketchWindow(wx.Panel):
         #图层设置
         self.geometry = []
         self.layer = []
+	self.polygon = []
         self.layers = []
 	self.flag = 0
+	
+	self.dataNum = 0
         #初始化
         self.InitBuffer()
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -357,16 +412,45 @@ class sketchWindow(wx.Panel):
                     y = self.size.height-(coords[1]-self.extent[2]/2-self.extent[3]/2)*self.ratio-self.size.height/2-self.pos[1]
                     self.geometry.append((x,y))
                 if type == 'D':
-		    dc.SetBrush(self.brush)
+		    #dc.SetBrush(self.brush)
 		    for point in self.geometry:			
 			dc.DrawCirclePoint(point ,2)
                 if type == 'L':
                     dc.DrawLines(self.geometry)
                 if type == 'P':
-                    dc.SetBrush(self.brush)
+                    #dc.SetBrush(self.brush)
                     dc.DrawPolygon(self.geometry)
                 else: pass
-
+		
+    def DrawPolygon(self, dc): 
+	for type, geometry, radius in polygon:
+	    self.geometry = []
+	    for coords in geometry:
+		x = (coords[0]-self.extent[0]/2-self.extent[1]/2)*self.ratio + self.size.width/2 + self.pos[0]
+		y = self.size.height-(coords[1]-self.extent[2]/2-self.extent[3]/2)*self.ratio-self.size.height/2-self.pos[1]		    
+		self.geometry.append((x,y))
+	    if type == 'point':
+		dc.SetBrush(self.brush)
+		for point in self.geometry:	
+		    dc.DrawCirclePoint(point ,radius)
+		#print self.cal_point(122, 55, self.extent)
+		#dc.DrawCirclePoint((750.2524900778502, 90.17498341600344),10)
+	    if type == 'line':
+		dc.SetBrush(self.brush)
+		dc.DrawLines(self.geometry)		    
+	    if type == 'polygon':
+		dc.SetBrush(self.brush)
+		dc.DrawPolygon(self.geometry)
+	    else: pass    
+    #----------------------------------------------------------------------
+    def addPolygon(self, polygon,type,radius=0 ):
+	""""""
+	self.pen = pen
+	self.brush = brush
+        self.polygon.append((polygon, type, radius))
+        self.reInitBuffer = True	
+	    
+	    
     def addFeature(self, list, type, OID):
         self.geometry = []
         while len(list):
@@ -425,6 +509,55 @@ class sketchWindow(wx.Panel):
         
         self.layers.append((shpLayer.GetName(), pen, brush, self.layer))
         self.reInitBuffer = True
+	
+    def addLayer2(self,  data, pen , brush, extent):
+	self.SetExtent(extent)
+	self.layer = []	
+	#try:
+	for geom in data:	
+	    geom_type = geom["geom"]["type"].lower()
+	    geom_data = geom["geom"]["coordinates"]
+	    	    
+	    if geom_type == "point":	
+		tmpList=[]
+		tmpList.extend(geom_data)
+		geometry = []
+		while len(tmpList):
+		    y = tmpList.pop()
+		    x = tmpList.pop()
+		    geometry.append((x,y))
+		self.layer.append(("D", geometry))
+		
+	    if geom_type == "linestring":
+		tmpList = geom_data  #[0]
+		self.layer.append(("L", tmpList))
+		
+	    if geom_type == "polygon":
+		tmpList= geom_data[0]
+		self.layer.append(("P", tmpList))
+
+	    if geom_type == "multipoint":
+		for i in range(len(geom_data[0])):
+		    tmpList=[]
+		    tmpList.extend(geom_data[0][i])
+		    self.layer.append(("D", tmpList))
+
+	    if geom_type == "multiline":
+		for i in range(len(geom_data[0])):
+		    tmpList = geom_data[0].tolist()
+		    self.layer.append(("L", tmpList))
+
+	    if geom_type == "multipolygon":
+		for i in range(len(geom_data[0])):
+		    tmpList = geom_data[0][i]
+		    self.layer.append(("P", tmpList))
+	    else:
+		print geom_type
+		print "error"
+    
+	self.layers.append((pen, brush, self.layer))
+	self.reInitBuffer = True
+	
 	
     def GetShpAttributes(self ):
 	"""读取shp 的attributes 数据"""
@@ -715,7 +848,38 @@ class sketchWindow2(wx.Window):
                     dc.SetBrush(self.brush)
                     dc.DrawPolygon(self.geometry)
                 else: pass
-
+		
+    def DrawPolygon(self, dc): 
+	#self.pen = pen
+	#self.brush = brush	
+	for type, geometry, radius in polygon:
+	    self.geometry = []
+	    for coords in geometry:
+		x = (coords[0]-self.extent[0]/2-self.extent[1]/2)*self.ratio + self.size.width/2 + self.pos[0]
+		y = self.size.height-(coords[1]-self.extent[2]/2-self.extent[3]/2)*self.ratio-self.size.height/2-self.pos[1]		    
+		self.geometry.append((x,y))
+	    if type == 'circle':
+		dc.SetBrush(self.brush)
+		for point in self.geometry:	
+		    dc.DrawCirclePoint(point ,radius)
+		#print self.cal_point(122, 55, self.extent)
+		#dc.DrawCirclePoint((750.2524900778502, 90.17498341600344),10)
+	    if type == 'line':
+		dc.SetBrush(self.brush)
+		dc.DrawLines(self.geometry)		    
+	    if type == 'polygon':
+		dc.SetBrush(self.brush)
+		dc.DrawPolygon(self.geometry)
+	    else: pass    
+    #----------------------------------------------------------------------
+    def addPolygon(self, polygon, type, brush, pen, radius=0 ):
+	""""""
+	self.pen = pen
+	self.brush = brush	
+	self.polygon.append((type, polygon, radius))
+	self.reInitBuffer = True	
+	
+	
     def addFeature(self, list, type, OID):
         self.geometry = []
         while len(list):
